@@ -30,45 +30,52 @@ def send_line_message(msg):
     print("LINE Status:", response.status_code)
 
 
-def get_realtime_change(symbol):
+def get_market_info(symbol):
     try:
         ticker = yf.Ticker(symbol)
 
-        info = ticker.fast_info
+        hist = ticker.history(period="3d")
 
-        current = info.get("lastPrice")
-        previous = info.get("previousClose")
+        if len(hist) < 2:
+            return None
 
-        if current is None or previous is None:
-            return "N/A"
+        current = hist["Close"].iloc[-1]
+        previous = hist["Close"].iloc[-2]
 
-        pct = ((current - previous) / previous) * 100
+        change_pct = ((current - previous) / previous) * 100
 
-        sign = "🔺" if pct > 0 else "🔻" if pct < 0 else "🔹"
+        sign = "🔺" if change_pct > 0 else "🔻" if change_pct < 0 else "🔹"
 
-        return f"{sign}{pct:+.2f}%"
-
-    except Exception as e:
-        print(f"{symbol} error: {e}")
-        return "N/A"
-
-
-def get_current_price(symbol):
-    try:
-        ticker = yf.Ticker(symbol)
-
-        info = ticker.fast_info
-
-        price = info.get("lastPrice")
-
-        if price is None:
-            return "N/A"
-
-        return f"{price:.2f}"
+        return {
+            "price": current,
+            "pct": change_pct,
+            "sign": sign
+        }
 
     except Exception as e:
         print(f"{symbol} error: {e}")
-        return "N/A"
+        return None
+
+
+def format_item(name, symbol):
+
+    data = get_market_info(symbol)
+
+    if data is None:
+        return f"• {name}: 取得失敗"
+
+    if symbol == "TWD=X":
+        return (
+            f"• {name}: "
+            f"{data['price']:.4f} "
+            f"({data['sign']}{data['pct']:+.2f}%)"
+        )
+
+    return (
+        f"• {name}: "
+        f"{data['price']:,.2f} "
+        f"({data['sign']}{data['pct']:+.2f}%)"
+    )
 
 
 def get_report_title():
@@ -90,48 +97,34 @@ def get_report_title():
 
 def build_report():
 
-    # 美股三大指數
-    dow = get_realtime_change("^DJI")
-    sp500 = get_realtime_change("^GSPC")
-    nasdaq = get_realtime_change("^IXIC")
-
-    # ETF
-    voo = get_realtime_change("VOO")
-    qqq = get_realtime_change("QQQ")
-    vti = get_realtime_change("VTI")
-
-    # 台積電ADR
-    tsm = get_realtime_change("TSM")
-
-    # VIX
-    vix = get_realtime_change("^VIX")
-
-    # 匯率
-    usd_twd = get_current_price("TWD=X")
-
     title = get_report_title()
 
     report = f"""
 {title}
 
-🇺🇸 美股大盤
-道瓊      {dow}
-標普500   {sp500}
-NASDAQ    {nasdaq}
+🇺🇸【美股大盤】
 
-📈 ETF
-VOO       {voo}
-QQQ       {qqq}
-VTI       {vti}
+{format_item("標普500指數", "^GSPC")}
+{format_item("那斯達克指數", "^IXIC")}
+{format_item("道瓊工業指數", "^DJI")}
 
-🏭 台積電ADR
-TSM       {tsm}
+📈【ETF】
 
-😱 市場情緒
-VIX       {vix}
+{format_item("VOO", "VOO")}
+{format_item("QQQ", "QQQ")}
+{format_item("VTI", "VTI")}
 
-💵 匯率
-USD/TWD   {usd_twd}
+🏭【台積電ADR】
+
+{format_item("TSM", "TSM")}
+
+😱【市場情緒】
+
+{format_item("VIX恐慌指數", "^VIX")}
+
+💵【匯率】
+
+{format_item("USD/TWD", "TWD=X")}
 
 🕒 {datetime.now().strftime("%Y-%m-%d %H:%M")}
 """
