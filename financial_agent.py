@@ -25,22 +25,28 @@ def send_line_message(msg):
         ]
     }
 
-    response = requests.post(url, headers=headers, json=payload)
+    response = requests.post(
+        url,
+        headers=headers,
+        json=payload
+    )
 
     print("LINE Status:", response.status_code)
 
 
 def get_market_info(symbol):
+
     try:
+
         ticker = yf.Ticker(symbol)
 
-        hist = ticker.history(period="3d")
+        hist = ticker.history(period="5d")
 
         if len(hist) < 2:
             return None
 
-        current = hist["Close"].iloc[-1]
-        previous = hist["Close"].iloc[-2]
+        current = float(hist["Close"].iloc[-1])
+        previous = float(hist["Close"].iloc[-2])
 
         change_pct = ((current - previous) / previous) * 100
 
@@ -53,7 +59,9 @@ def get_market_info(symbol):
         }
 
     except Exception as e:
+
         print(f"{symbol} error: {e}")
+
         return None
 
 
@@ -64,7 +72,18 @@ def format_item(name, symbol):
     if data is None:
         return f"• {name}: 取得失敗"
 
-    if symbol == "TWD=X":
+    # 美國10年公債特殊處理
+    if symbol == "^TNX":
+
+        return (
+            f"• {name}: "
+            f"{data['price']/10:.2f}% "
+            f"({data['sign']}{data['pct']:+.2f}%)"
+        )
+
+    # 匯率
+    if symbol in ["TWD=X", "CNY=X"]:
+
         return (
             f"• {name}: "
             f"{data['price']:.4f} "
@@ -122,9 +141,22 @@ def build_report():
 
 {format_item("VIX恐慌指數", "^VIX")}
 
-💵【匯率】
+👑【關鍵商品】
+
+{format_item("黃金期貨", "GC=F")}
+{format_item("白銀期貨", "SI=F")}
+{format_item("銅期貨", "HG=F")}
+{format_item("WTI原油", "CL=F")}
+
+🏦【利率與美元】
+
+{format_item("美國10年公債", "^TNX")}
+{format_item("美元指數(DXY)", "DX-Y.NYB")}
+
+💵【主要匯率】
 
 {format_item("USD/TWD", "TWD=X")}
+{format_item("USD/CNY", "CNY=X")}
 
 🕒 {datetime.now().strftime("%Y-%m-%d %H:%M")}
 """
@@ -134,10 +166,12 @@ def build_report():
 
 if __name__ == "__main__":
 
-    print("=== Finance Agent Start ===")
+    print("=== Market Report Start ===")
 
     report = build_report()
 
+    print(report)
+
     send_line_message(report)
 
-    print("=== Finance Agent Finished ===")
+    print("=== Market Report Finished ===")
